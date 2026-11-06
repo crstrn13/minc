@@ -23,11 +23,12 @@ type provider struct {
 	info          *providers.ProviderInfo
 	useSudo       bool
 	allowRootless bool
+	name          string
 }
 
-// New builds a Podman provider. When allowRootless is true, minc stays on the user's rootless
-// Podman (no sudo) and skips the rootful-only guard; MicroShift may still fail at runtime.
-func New(allowRootless bool) (providers.Provider, error) {
+// New builds a Podman provider for the named cluster. When allowRootless is true,
+// minc stays on rootless Podman (no sudo) and skips the rootful-only guard.
+func New(allowRootless bool, name string) (providers.Provider, error) {
 	rootlessRuntime, err := rootlessFromUserPodman()
 	if err != nil {
 		return nil, err
@@ -37,6 +38,7 @@ func New(allowRootless bool) (providers.Provider, error) {
 	p := &provider{
 		allowRootless: allowRootless,
 		useSudo:       useSudo,
+		name:          name,
 	}
 	info, err := p.fetchProviderInfo()
 	if err != nil {
@@ -107,7 +109,7 @@ func (p *provider) Create(cType *types.CreateType) error {
 			return fmt.Errorf("podman store graph root: %w", err)
 		}
 		cOptions := &providers.COptions{
-			ContainerName:        constants.ContainerName,
+			ContainerName:        p.name,
 			ImageName:            constants.GetUShiftImage(cType.UShiftImage, cType.UShiftVersion),
 			UShiftConfig:         cType.UShiftConfig,
 			HttpPort:             cType.HTTPPort,
@@ -132,7 +134,7 @@ func (p *provider) Create(cType *types.CreateType) error {
 		}
 		log.Debug(string(out))
 	}
-	cmd := p.podmanCmd(providers.StartOptions(constants.ContainerName))
+	cmd := p.podmanCmd(providers.StartOptions(p.name))
 	out, err := exec.Output(cmd)
 	if err != nil {
 		return err
@@ -146,7 +148,7 @@ func (p *provider) WaitForMicroShiftService() error {
 		return err
 	}
 	cmdFunc := func() error {
-		cmd := p.podmanCmd(providers.ServiceWaitOption("microshift", constants.ContainerName))
+		cmd := p.podmanCmd(providers.ServiceWaitOption("microshift", p.name))
 		out, err := exec.Output(cmd)
 		if err != nil {
 			return err
@@ -162,7 +164,7 @@ func (p *provider) GetKubeConfig() ([]byte, error) {
 	if err := p.checkCGroupsAndRootFulMode(); err != nil {
 		return nil, err
 	}
-	cmd := p.podmanCmd(providers.KubeConfigOption(constants.ContainerName, constants.HostName))
+	cmd := p.podmanCmd(providers.KubeConfigOption(p.name, constants.HostName))
 	return exec.Output(cmd)
 }
 
@@ -170,7 +172,7 @@ func (p *provider) Delete() error {
 	if err := p.checkCGroupsAndRootFulMode(); err != nil {
 		return err
 	}
-	cmd := p.podmanCmd(providers.DeleteOptions(constants.ContainerName))
+	cmd := p.podmanCmd(providers.DeleteOptions(p.name))
 	out, err := exec.Output(cmd)
 	if err != nil {
 		return err
@@ -184,17 +186,17 @@ func (p *provider) List() ([]byte, error) {
 	if err := p.checkCGroupsAndRootFulMode(); err != nil {
 		return out, err
 	}
-	cmd := p.podmanCmd(providers.ListOptions(constants.ContainerName))
+	cmd := p.podmanCmd(providers.ListOptions(p.name))
 	out, err := exec.Output(cmd)
 	if err != nil {
 		return out, err
 	}
 	log.Debug(string(out))
 	if len(out) == 0 {
-		return out, fmt.Errorf("no %s containers found, use 'create' command to create it", constants.ContainerName)
+		return out, fmt.Errorf("no %s containers found, use 'create' command to create it", p.name)
 	}
 	if !strings.Contains(string(out), "running") {
-		return out, fmt.Errorf("%s container is not running, use 'create' command to run it", constants.ContainerName)
+		return out, fmt.Errorf("%s container is not running, use 'create' command to run it", p.name)
 	}
 	return out, nil
 }
@@ -261,6 +263,15 @@ func (p *provider) podmanCmd(args []string) exec.Cmd {
 		return exec.Command("sudo", append([]string{"podman"}, args...)...)
 	}
 	return exec.Command("podman", args...)
+}
+
+func (p *provider) HostPort(containerPort int) (int, error) {
+	cmd := p.podmanCmd(providers.HostPortOptions(p.name, containerPort))
+	out, err := exec.Output(cmd)
+	if err != nil {
+		return 0, fmt.Errorf("reading host port for %d: %w", containerPort, err)
+	}
+	return providers.ParseHostPort(string(out))
 }
 
 // rootlessConfigs holds the host paths for all rootless configuration files.

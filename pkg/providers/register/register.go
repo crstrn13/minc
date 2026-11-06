@@ -8,14 +8,16 @@ import (
 	"github.com/spf13/viper"
 )
 
-func Register(provider string) (providers.Provider, error) {
-	allowRootless := viper.GetBool("allow-rootless") || rootlessmarker.Present()
+// Register builds the container provider for the given engine, scoped to the
+// named cluster.
+func Register(provider, name string) (providers.Provider, error) {
+	allowRootless := viper.GetBool("allow-rootless") || rootlessmarker.Present(name)
 	switch provider {
 	case "podman":
-		return podman.New(allowRootless)
+		return podman.New(allowRootless, name)
 	case "docker":
-		return moby.New()
+		return moby.New(name)
 	default:
-		return podman.New(allowRootless)
+		return podman.New(allowRootless, name)
 	}
 }

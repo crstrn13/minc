@@ -2,8 +2,49 @@ package providers
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/minc-org/minc/pkg/constants"
 )
+
+// publishPort builds a `-p` spec. hostPort 0 requests an ephemeral port; ports
+// < 1024 bind all interfaces (macOS cannot bind them to 127.0.0.1).
+func publishPort(hostPort, containerPort int) string {
+	if hostPort == 0 {
+		return fmt.Sprintf("127.0.0.1::%d", containerPort)
+	}
+	if hostPort < 1024 {
+		return fmt.Sprintf("%d:%d", hostPort, containerPort)
+	}
+	return fmt.Sprintf("127.0.0.1:%d:%d", hostPort, containerPort)
+}
+
+// HostPortOptions builds the `port` args to read back a published host port.
+func HostPortOptions(containerName string, containerPort int) []string {
+	return []string{"port", containerName, strconv.Itoa(containerPort)}
+}
+
+// ParseHostPort extracts the host port from `<engine> port` output, e.g.
+// "127.0.0.1:49153" (may be multiple lines for IPv4/IPv6).
+func ParseHostPort(out string) (int, error) {
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		idx := strings.LastIndex(line, ":")
+		if idx < 0 {
+			continue
+		}
+		port, err := strconv.Atoi(strings.TrimSpace(line[idx+1:]))
+		if err != nil {
+			continue
+		}
+		return port, nil
+	}
+	return 0, fmt.Errorf("could not parse host port from %q", out)
+}
 
 type COptions struct {
 	ContainerName       string
@@ -35,23 +76,15 @@ type COptions struct {
 
 func CreateOptions(r *COptions) []string {
 	// in case http or https port is less than 1024 then macOS doesn't allow to bind with 127.0.0.1 so
-	// need to bind with all the interfaces
-	httpPortOption := "127.0.0.1:%d:80"
-	httpsPortOption := "127.0.0.1:%d:443"
-	if r.HttpPort < 1024 {
-		httpPortOption = "%d:80"
-	}
-	if r.HttpsPort < 1024 {
-		httpsPortOption = "%d:443"
-	}
 	createOptions := []string{
 		"create",
 		"--hostname", constants.HostName,
 		"--label", fmt.Sprintf("%s=%s", constants.LabelKey, r.ContainerName),
 		"-it", "--privileged",
-		"-p", fmt.Sprintf(httpPortOption, r.HttpPort),
-		"-p", fmt.Sprintf(httpsPortOption, r.HttpsPort),
-		"-p", "127.0.0.1:6443:6443",
+		"-p", publishPort(r.HttpPort, 80),
+		"-p", publishPort(r.HttpsPort, 443),
+		// apiserver is always ephemeral; the port is read back into the kubeconfig.
+		"-p", publishPort(0, APIServerContainerPort),
 	}
 
 	if r.AllowRootless {

@@ -17,11 +17,13 @@ var configCmd = &cobra.Command{
 
 // defaultConfig holds all the default configuration values
 var defaultConfig = map[string]interface{}{
-	"provider":              "podman",
-	"log-level":             "info",
-	"microshift-version":    constants.UShiftVersion,
-	"https-port":            "9443",
-	"http-port":             "9080",
+	"name":               constants.ContainerName,
+	"provider":           "podman",
+	"log-level":          "info",
+	"microshift-version": constants.UShiftVersion,
+	// "0" publishes to an ephemeral host port so multiple clusters can coexist.
+	"https-port":            "0",
+	"http-port":             "0",
 	"microshift-config":     "",
 	"disable-overlay-cache": false,
 	"allow-rootless":        false,

@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-func Status(provider string) *types.StatusType {
+func Status(provider, name string) *types.StatusType {
 	status := types.StatusType{
 		Container: "stopped",
 		APIServer: "stopped",
 	}
-	p, err := register.Register(provider)
+	p, err := register.Register(provider, name)
 	if err != nil {
 		status.Error = err.Error()
 		return &status
@@ -25,7 +25,7 @@ func Status(provider string) *types.StatusType {
 	if strings.Contains(string(out), "running") {
 		status.Container = "running"
 	}
-	config, err := p.GetKubeConfig()
+	config, err := resolveKubeConfig(p, name)
 	if err != nil {
 		status.Error = err.Error()
 		return &status

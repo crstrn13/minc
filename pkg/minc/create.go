@@ -14,7 +14,7 @@ import (
 )
 
 func Create(cType *types.CreateType) error {
-	p, err := register.Register(cType.Provider)
+	p, err := register.Register(cType.Provider, cType.Name)
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func Create(cType *types.CreateType) error {
 
 	log.Info("Waiting for KubeConfig ...")
 	s.Start()
-	config, err := p.GetKubeConfig()
+	config, err := resolveKubeConfig(p, cType.Name)
 	if err != nil {
 		return err
 	}

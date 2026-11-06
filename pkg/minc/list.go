@@ -5,8 +5,8 @@ import (
 	"github.com/minc-org/minc/pkg/providers/register"
 )
 
-func List(provider string) ([]byte, error) {
-	p, err := register.Register(provider)
+func List(provider, name string) ([]byte, error) {
+	p, err := register.Register(provider, name)
 	if err != nil {
 		return nil, err
 	}

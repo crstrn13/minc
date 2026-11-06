@@ -6,8 +6,8 @@ import (
 	"github.com/minc-org/minc/pkg/providers/register"
 )
 
-func Delete(provider string) error {
-	p, err := register.Register(provider)
+func Delete(provider, name string) error {
+	p, err := register.Register(provider, name)
 	if err != nil {
 		return err
 	}
@@ -16,7 +16,7 @@ func Delete(provider string) error {
 		return err
 	}
 	log.Info("Removing entry from kubeconfig ...")
-	if err := kubeconfig.RemoveClusterFromConfig(); err != nil {
+	if err := kubeconfig.RemoveClusterFromConfig(name); err != nil {
 		return err
 	}
 	return nil

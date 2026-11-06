@@ -18,14 +18,15 @@ import (
 // see NewProvider
 type provider struct {
 	info *providers.ProviderInfo
+	name string
 }
 
-func New() (providers.Provider, error) {
+func New(name string) (providers.Provider, error) {
 	pInfo, err := getProviderInfo()
 	if err != nil {
 		return nil, err
 	}
-	return &provider{pInfo}, nil
+	return &provider{info: pInfo, name: name}, nil
 }
 
 func (p *provider) Name() string {
@@ -71,7 +72,7 @@ func (p *provider) Create(cType *types.CreateType) error {
 	}
 	if out, _ := p.List(); len(out) == 0 {
 		cOptions := &providers.COptions{
-			ContainerName:       constants.ContainerName,
+			ContainerName:       p.name,
 			ImageName:           constants.GetUShiftImage(cType.UShiftImage, cType.UShiftVersion),
 			UShiftConfig:        cType.UShiftConfig,
 			HttpPort:            cType.HTTPPort,
@@ -88,7 +89,7 @@ func (p *provider) Create(cType *types.CreateType) error {
 		log.Debug(string(out))
 	}
 	cmd := exec.Command("docker",
-		providers.StartOptions(constants.ContainerName)...,
+		providers.StartOptions(p.name)...,
 	)
 	out, err := exec.Output(cmd)
 	if err != nil {
@@ -104,7 +105,7 @@ func (p *provider) WaitForMicroShiftService() error {
 	}
 	cmdFunc := func() error {
 		cmd := exec.Command("docker",
-			providers.ServiceWaitOption("microshift", constants.ContainerName)...,
+			providers.ServiceWaitOption("microshift", p.name)...,
 		)
 		out, err := exec.Output(cmd)
 		if err != nil {
@@ -122,7 +123,7 @@ func (p *provider) GetKubeConfig() ([]byte, error) {
 		return nil, err
 	}
 	cmd := exec.Command("docker",
-		providers.KubeConfigOption(constants.ContainerName, constants.HostName)...,
+		providers.KubeConfigOption(p.name, constants.HostName)...,
 	)
 	return exec.Output(cmd)
 }
@@ -132,7 +133,7 @@ func (p *provider) Delete() error {
 		return err
 	}
 	cmd := exec.Command("docker",
-		providers.DeleteOptions(constants.ContainerName)...,
+		providers.DeleteOptions(p.name)...,
 	)
 	out, err := exec.Output(cmd)
 	if err != nil {
@@ -148,17 +149,17 @@ func (p *provider) List() ([]byte, error) {
 		return out, err
 	}
 	cmd := exec.Command("docker",
-		providers.ListOptions(constants.ContainerName)...,
+		providers.ListOptions(p.name)...,
 	)
 	out, err := exec.Output(cmd)
 	if err != nil {
 		return out, err
 	}
 	if len(out) == 0 {
-		return out, fmt.Errorf("no %s containers found, use 'create' command to create it", constants.ContainerName)
+		return out, fmt.Errorf("no %s containers found, use 'create' command to create it", p.name)
 	}
 	if !strings.Contains(string(out), "running") {
-		return out, fmt.Errorf("%s container is not running, use 'create' command to run it", constants.ContainerName)
+		return out, fmt.Errorf("%s container is not running, use 'create' command to run it", p.name)
 	}
 	return out, nil
 }
@@ -215,4 +216,13 @@ func checkCGroupsAndRootFulMode(pInfo *providers.ProviderInfo) error {
 // This is only used for setting the Node's providerID
 func (p *provider) String() string {
 	return "docker"
+}
+
+func (p *provider) HostPort(containerPort int) (int, error) {
+	cmd := exec.Command("docker", providers.HostPortOptions(p.name, containerPort)...)
+	out, err := exec.Output(cmd)
+	if err != nil {
+		return 0, fmt.Errorf("reading host port for %d: %w", containerPort, err)
+	}
+	return providers.ParseHostPort(string(out))
 }

@@ -5,20 +5,22 @@ import (
 	"path/filepath"
 )
 
-const markerFile = ".rootless-cluster"
+const markerPrefix = ".rootless-cluster"
 
-// Path returns the path to the on-disk marker, or an error if the user config dir cannot be resolved.
-func Path() (string, error) {
+// Path returns the path to the on-disk marker for the named cluster, or an error
+// if the user config dir cannot be resolved.
+func Path(name string) (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "minc", markerFile), nil
+	return filepath.Join(dir, "minc", markerPrefix+"-"+name), nil
 }
 
-// Present is true when this minc cluster was created with rootless Podman (see register).
-func Present() bool {
-	p, err := Path()
+// Present is true when the named minc cluster was created with rootless Podman
+// (see register).
+func Present(name string) bool {
+	p, err := Path(name)
 	if err != nil {
 		return false
 	}
@@ -27,8 +29,8 @@ func Present() bool {
 }
 
 // Set writes the marker after a successful rootless create.
-func Set() error {
-	p, err := Path()
+func Set(name string) error {
+	p, err := Path(name)
 	if err != nil {
 		return err
 	}
@@ -39,8 +41,8 @@ func Set() error {
 }
 
 // Remove deletes the marker; call after a successful minc delete of a rootless cluster.
-func Remove() error {
-	p, err := Path()
+func Remove(name string) error {
+	p, err := Path(name)
 	if err != nil {
 		return err
 	}

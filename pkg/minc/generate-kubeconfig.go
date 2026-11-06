@@ -6,8 +6,8 @@ import (
 	"github.com/minc-org/minc/pkg/providers/register"
 )
 
-func GenerateKubeConfig(provider string) error {
-	p, err := register.Register(provider)
+func GenerateKubeConfig(provider, name string) error {
+	p, err := register.Register(provider, name)
 	if err != nil {
 		return err
 	}
@@ -15,7 +15,7 @@ func GenerateKubeConfig(provider string) error {
 	if _, err := p.List(); err != nil {
 		return err
 	}
-	config, err := p.GetKubeConfig()
+	config, err := resolveKubeConfig(p, name)
 	if err != nil {
 		return err
 	}

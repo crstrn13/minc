@@ -1,6 +1,7 @@
 package types
 
 type CreateType struct {
+	Name                string
 	Provider            string
 	UShiftVersion       string
 	UShiftImage         string

@@ -17,6 +17,7 @@ import (
 )
 
 var (
+	clusterName         string
 	provider            string
 	logLevel            string
 	uShiftVersion       string
@@ -49,6 +50,7 @@ var createCmd = &cobra.Command{
 		}
 
 		cType := &types.CreateType{
+			Name:                viper.GetString("name"),
 			Provider:            viper.GetString("provider"),
 			UShiftVersion:       viper.GetString("microshift-version"),
 			UShiftImage:         viper.GetString("microshift-image"),
@@ -59,14 +61,14 @@ var createCmd = &cobra.Command{
 		}
 		allowRL := viper.GetBool("allow-rootless")
 		if allowRL {
-			if err := rootlessmarker.Set(); err != nil {
+			if err := rootlessmarker.Set(cType.Name); err != nil {
 				log.Fatal("failed to record rootless mode", "err", err)
 			}
 		}
 		err = minc.Create(cType)
 		if err != nil {
 			if allowRL {
-				if rmErr := rootlessmarker.Remove(); rmErr != nil {
+				if rmErr := rootlessmarker.Remove(cType.Name); rmErr != nil {
 					log.Error("failed to clear rootless marker after create failure", "err", rmErr)
 				}
 			}
@@ -80,7 +82,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List the MicroShift cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		ls, err := minc.List(viper.GetString("provider"))
+		ls, err := minc.List(viper.GetString("provider"), viper.GetString("name"))
 		if err != nil {
 			log.Fatal("error listing cluster", "err", err)
 		}
@@ -92,7 +94,7 @@ var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Status of MicroShift cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		status := minc.Status(viper.GetString("provider"))
+		status := minc.Status(viper.GetString("provider"), viper.GetString("name"))
 		jsonData, err := json.MarshalIndent(status, "", "  ")
 		if err != nil {
 			log.Fatal("error marshalling status", "err", err)
@@ -105,11 +107,12 @@ var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete the MicroShift cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := minc.Delete(viper.GetString("provider"))
+		name := viper.GetString("name")
+		err := minc.Delete(viper.GetString("provider"), name)
 		if err != nil {
 			log.Fatal("error deleting cluster", "err", err)
 		}
-		if err := rootlessmarker.Remove(); err != nil {
+		if err := rootlessmarker.Remove(name); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: deleted cluster but failed to clear rootless marker: %v\n", err)
 		}
 		fmt.Println("Item deleted")
@@ -120,7 +123,7 @@ var generateKubeConfig = &cobra.Command{
 	Use:   "generate-kubeconfig",
 	Short: "generate the kubeconfig for MicroShift cluster",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := minc.GenerateKubeConfig(viper.GetString("provider"))
+		err := minc.GenerateKubeConfig(viper.GetString("provider"), viper.GetString("name"))
 		if err != nil {
 			log.Fatal("error generating kubeconfig file", "err", err)
 		}
@@ -203,6 +206,8 @@ func main() {
 	createCmd.PersistentFlags().BoolVar(&disableOverlayCache, "disable-overlay-cache", defaultConfig["disable-overlay-cache"].(bool),
 		"Disable container overlay storage cache mount for better isolation and macOS Docker compatibility")
 
+	rootCmd.PersistentFlags().StringVarP(&clusterName, "name", "n", defaultConfig["name"].(string),
+		"Name of the cluster; multiple named clusters can run on one host")
 	rootCmd.PersistentFlags().StringVarP(&provider, "provider", "p", "", "Specify the provider (e.g., podman, docker)")
 	rootCmd.PersistentFlags().StringVarP(&logLevel, "log-level", "l", "", "Log level (e.g., info, debug, warn)")
 	rootCmd.PersistentFlags().BoolVar(&allowRootless, "allow-rootless", defaultConfig["allow-rootless"].(bool),
@@ -214,6 +219,7 @@ func main() {
 	rootCmd.AddCommand(createCmd, listCmd, deleteCmd, versionCmd, statusCmd, generateKubeConfig, configCmd)
 
 	// Binding with viper
+	viper.BindPFlag("name", rootCmd.PersistentFlags().Lookup("name"))
 	viper.BindPFlag("provider", rootCmd.PersistentFlags().Lookup("provider"))
 	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
 	viper.BindPFlag("allow-rootless", rootCmd.PersistentFlags().Lookup("allow-rootless"))
